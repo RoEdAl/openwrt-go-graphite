@@ -9,8 +9,36 @@ PROG=/usr/bin/go-carbon
 CONFIG_DIR=/etc/go-carbon
 CONFIG_FILE=go-carbon.conf
 
-start_service() {
-  procd_open_instance "$NAME"
+validate_section_carbon() {
+  uci_load_validate "${NAME}" "${NAME}" "$1" "$2" \
+    'enable:bool:0' \
+    'whisper_dir:string' \
+    'create_whisper_dir:bool:1' \
+    'chown_whisper_dir:bool:1'
+}
+
+carbon_instance() {
+  [ "$2" = 0 ] || {
+    echo "validation failed"
+    return 1
+  }
+
+  [ "${enable}" = 0 ] && return 1
+
+  if [ ! -d "${whisper_dir}" ]; then
+    if [ "${create_whisper_dir}" = 0 ]; then
+      echo "Invalid directory: ${whisper_dir}"
+      return 1
+    else
+      mkdir -p "${whisper_dir}" || return 1
+    fi
+  fi
+
+  if [ "${chown_whisper_dir}" != 0 ]; then
+    chown -R carbon:carbon "${whisper_dir}" || return 1
+  fi
+
+  procd_open_instance "${NAME}-${1}"
   procd_set_param command "$PROG" -config "${CONFIG_DIR}/${CONFIG_FILE}"
   procd_set_param respawn
   procd_set_param stdout 1
@@ -20,12 +48,25 @@ start_service() {
   procd_set_param no_new_privs 1
   procd_set_param reload_signal HUP
   procd_set_param term_timeout 30
-  procd_add_jail "$NAME" ronly requirejail log
+  procd_add_jail "${NAME}-${1}" ronly requirejail log
   procd_add_jail_mount /etc/hosts
   procd_add_jail_mount /etc/TZ
   procd_add_jail_mount "${CONFIG_DIR}/${CONFIG_FILE}"
   procd_add_jail_mount "${CONFIG_DIR}/storage-aggregation.conf"
   procd_add_jail_mount "${CONFIG_DIR}/storage-schemas.conf"
-  procd_add_jail_mount_rw "/var/lib/graphite/whisper"
+  procd_add_jail_mount_rw "${whisper_dir}"
   procd_close_instance
+}
+
+start_service() {
+  config_load "${NAME}"
+  config_foreach validate_section_carbon "${NAME}" carbon_instance
+}
+
+service_triggers() {
+  procd_add_reload_trigger "$NAME"
+
+  procd_open_validate
+  validate_section_carbon
+  procd_close_validate
 }

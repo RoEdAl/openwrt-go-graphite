@@ -47,23 +47,15 @@ define Package/go-carbon/install
 	$(INSTALL_DATA) files/storage-aggregation.conf $(1)/etc/go-carbon
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) files/go-carbon.init $(1)/etc/init.d/go-carbon
-	$(INSTALL_DIR) $(1)/var/lib/graphite/whisper
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) files/go-carbon.config $(1)/etc/config/go-carbon
 endef
 
 define Package/go-carbon/conffiles
+/etc/config/go-carbon
 /etc/go-carbon/go-carbon.conf
 /etc/go-carbon/storage-schemas.conf
 /etc/go-carbon/storage-aggregation.conf
-/etc/go-carbon/
-/var/lib/graphite/whisper/
-endef
-
-define Package/go-carbon/postinst
-#!/bin/sh
-if [ -z "$${IPKG_INSTROOT}" ]; then
-  chown -R carbon:carbon /var/lib/graphite/whisper
-fi
-exit 0
 endef
 
 $(eval $(call GoBinPackage,go-carbon))
